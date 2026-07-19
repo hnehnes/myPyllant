@@ -321,10 +321,11 @@ async def _mocked_api(*args, **kwargs) -> MyPyllantAPI:
 def _yields_systems(test_data) -> bool:
     """Return True if the fixture produces at least one System.
 
-    Mirrors api.get_systems: a home whose control identifier is UNSUPPORTED is
-    skipped by the API, so such homes never yield a System object.  A fixture
-    yields systems iff at least one home has a non-unsupported control identifier
-    (or the identifier is missing/unknown, in which we assume a supported system).
+    Mirrors api.get_systems: a home whose control identifier is UNSUPPORTED or SCF is
+    skipped by the API (scf/iQconnect systems have no aggregate System), so such homes
+    never yield a System object.  A fixture yields systems iff at least one home has a
+    control identifier that is neither unsupported nor scf (or the identifier is
+    missing/unknown, in which case we assume a supported system).
     """
     from myPyllant.enums import ControlIdentifier
 
@@ -335,10 +336,8 @@ def _yields_systems(test_data) -> bool:
             .get("controlIdentifier")
         )
         try:
-            if (
-                control_identifier is None
-                or not ControlIdentifier(control_identifier).is_unsupported
-            ):
+            ci = ControlIdentifier(control_identifier) if control_identifier else None
+            if ci is None or not (ci.is_unsupported or ci.is_scf):
                 return True
         except ValueError:
             # Unknown identifier — assume supported
