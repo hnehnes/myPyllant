@@ -368,7 +368,9 @@ class MyPyllantAPI:
         no_facility_error: AmbisenseNoFacilityError | None = None
         for home in homes:
             control_identifier = await self.get_control_identifier(home.system_id)
-            if control_identifier.is_unsupported:
+            # scf/iQconnect systems have no aggregate System (their state comes from
+            # system-control/v1 and is handled by the consumer); skip them here.
+            if control_identifier.is_unsupported or control_identifier.is_scf:
                 continue
             system_url = await self.get_system_api_base(home.system_id)
             assert (
