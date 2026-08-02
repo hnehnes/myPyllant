@@ -16,7 +16,8 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 from myPyllant.api import get_api_base, get_system_api_base
-from myPyllant.const import DEFAULT_CONTROL_IDENTIFIER
+from myPyllant.const import DEFAULT_CONTROL_IDENTIFIER, SYSTEM_CONTROL_API_URL_BASE
+from myPyllant.enums import ControlIdentifier
 from myPyllant.utils import add_default_parser_args
 
 logger = logging.getLogger(__name__)
@@ -177,22 +178,44 @@ async def main(user, password, brand, country=None, write_results=True):
             except Exception as e:
                 logger.error(f"Error fetching {connection_status_url}: {e}", exc_info=e)
 
-            system_url = get_system_api_base(real_system_id, control_identifier)
-            try:
-                async with api.aiohttp_session.get(
-                    system_url, headers=api.get_authorized_headers()
-                ) as system_resp:
-                    system = await system_resp.json()
-                    anonymized_homes = _recursive_data_anonymize(
-                        copy.deepcopy(system), SALT
-                    )
-                    create_result(
-                        anonymized_homes,
-                        "system",
-                        anonymized_system_id,
-                    )
-            except Exception as e:
-                logger.error(f"Error fetching {system_url}: {e}", exc_info=e)
+            if ControlIdentifier(control_identifier).is_scf:
+                # scf/iQconnect systems have no aggregate system endpoint (404s); their
+                # state lives at system-control/v1/systems/{id}/state instead.
+                scf_state_url = (
+                    f"{SYSTEM_CONTROL_API_URL_BASE}/systems/{real_system_id}/state"
+                )
+                try:
+                    async with api.aiohttp_session.get(
+                        scf_state_url, headers=api.get_authorized_headers()
+                    ) as scf_state_resp:
+                        scf_state = await scf_state_resp.json()
+                        anonymized_scf_state = _recursive_data_anonymize(
+                            copy.deepcopy(scf_state), SALT
+                        )
+                        create_result(
+                            anonymized_scf_state,
+                            "scf_state",
+                            anonymized_system_id,
+                        )
+                except Exception as e:
+                    logger.error(f"Error fetching {scf_state_url}: {e}", exc_info=e)
+            else:
+                system_url = get_system_api_base(real_system_id, control_identifier)
+                try:
+                    async with api.aiohttp_session.get(
+                        system_url, headers=api.get_authorized_headers()
+                    ) as system_resp:
+                        system = await system_resp.json()
+                        anonymized_homes = _recursive_data_anonymize(
+                            copy.deepcopy(system), SALT
+                        )
+                        create_result(
+                            anonymized_homes,
+                            "system",
+                            anonymized_system_id,
+                        )
+                except Exception as e:
+                    logger.error(f"Error fetching {system_url}: {e}", exc_info=e)
 
             current_system_url = (
                 f"{get_api_base()}/emf/v2/{real_system_id}/currentSystem"

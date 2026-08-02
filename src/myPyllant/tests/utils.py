@@ -11,7 +11,7 @@ from aiohttp import ClientSession, ClientResponse
 from aioresponses import CallbackResult, aioresponses
 from aioresponses.compat import URL
 from myPyllant.api import MyPyllantAPI
-from myPyllant.const import API_URL_BASE, LOGIN_URL
+from myPyllant.const import API_URL_BASE, LOGIN_URL, SYSTEM_CONTROL_API_URL_BASE
 from myPyllant.tests.generate_test_data import DATA_DIR
 from myPyllant.utils import get_realm
 
@@ -183,13 +183,23 @@ def _mypyllant_aioresponses():
                 payload={},
                 repeat=True,
             )
+            self.patch(
+                re.compile(
+                    r".*(cylinder-temperature|heating-temperature-setpoint|"
+                    r"circulation-pump-time-periods|heating-time-periods|"
+                    r"circuit-time-periods)$"
+                ),
+                status=202,
+                payload={},
+                repeat=True,
+            )
 
             def get_test_data(url: str, key: str, default=None) -> CallbackResult:
                 """
                 Return test data CallbackResult based on the URL and key
                 """
                 url_parts = None
-                for api_base in API_URL_BASE.values():
+                for api_base in (*API_URL_BASE.values(), SYSTEM_CONTROL_API_URL_BASE):
                     if url.startswith(api_base):
                         url_parts = url.replace(api_base, "").split("/")
                         break
@@ -217,6 +227,8 @@ def _mypyllant_aioresponses():
                         result = get_test_data(url, "current_system")
                     case url if re.match(r".*buckets\?.*", url):
                         result = get_test_data(url, "device_buckets")
+                    case url if re.match(r".*/systems/.*/state$", url):
+                        result = get_test_data(url, "scf_state")
                     case url if re.match(r".*systems/.*/tli", url):
                         result = get_test_data(url, "system")
                     case url if re.match(r".*vrc700.*systems.*", url):
